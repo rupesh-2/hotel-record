@@ -731,7 +731,19 @@ export default function MealTracker() {
       <header className="bg-blue-900 text-white shadow-lg">
         <div className="container mx-auto px-4 py-6">
           <div className="flex items-center justify-between">
-            <div className="flex-1"></div>
+            <div className="flex-1 flex items-center">
+              <img
+                src="/ninja-infosys-logo.png"
+                alt="Ninja Infosys Logo"
+                className="h-12 w-auto mr-4"
+              />
+              <div className="text-left">
+                <h2 className="text-lg font-semibold text-blue-100">
+                  Ninja Infosys
+                </h2>
+                <p className="text-xs text-blue-200">Technology Solutions</p>
+              </div>
+            </div>
             <div className="text-center">
               <h1 className="text-3xl font-bold">Office Meal Tracker</h1>
               <p className="text-blue-200 mt-2">Daily Meal Management System</p>
