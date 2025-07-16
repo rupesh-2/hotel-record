@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +16,7 @@ import {
   X,
   History,
   ArrowLeft,
+  Database,
 } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -33,20 +34,25 @@ import {
 import { format } from "date-fns";
 
 interface MealEntry {
+  id: string;
   date: string;
-  type: "chicken" | "veg" | null;
+  type: "CHICKEN" | "VEG" | null;
   cost: number;
+  teamMemberId: string;
 }
 
 interface TeamMember {
   id: string;
+  employeeId: string;
   name: string;
   meals: MealEntry[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 const MEAL_PRICES = {
-  chicken: 220,
-  veg: 120,
+  CHICKEN: 220,
+  VEG: 120,
 };
 
 export default function MealTracker() {
@@ -56,113 +62,117 @@ export default function MealTracker() {
     useState<TeamMember | null>(null);
   const [newMemberName, setNewMemberName] = useState("");
   const [newMemberId, setNewMemberId] = useState("");
-  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([
-    {
-      id: "EMP001",
-      name: "Ahmed Khan",
-      meals: [
-        { date: "2024-01-10", type: "chicken", cost: 220 },
-        { date: "2024-01-11", type: "veg", cost: 120 },
-        { date: "2024-01-12", type: "chicken", cost: 220 },
-        { date: "2024-01-15", type: "chicken", cost: 220 },
-        { date: "2024-01-16", type: "veg", cost: 120 },
-        { date: "2024-01-17", type: null, cost: 0 },
-        { date: "2024-01-18", type: "chicken", cost: 220 },
-        { date: "2024-01-19", type: "veg", cost: 120 },
-      ],
-    },
-    {
-      id: "EMP002",
-      name: "Sarah Ali",
-      meals: [
-        { date: "2024-01-10", type: "veg", cost: 120 },
-        { date: "2024-01-11", type: "veg", cost: 120 },
-        { date: "2024-01-12", type: "chicken", cost: 220 },
-        { date: "2024-01-15", type: "veg", cost: 120 },
-        { date: "2024-01-16", type: "chicken", cost: 220 },
-        { date: "2024-01-17", type: "chicken", cost: 220 },
-        { date: "2024-01-18", type: "veg", cost: 120 },
-      ],
-    },
-    {
-      id: "EMP003",
-      name: "Hassan Ahmed",
-      meals: [
-        { date: "2024-01-09", type: "chicken", cost: 220 },
-        { date: "2024-01-10", type: "chicken", cost: 220 },
-        { date: "2024-01-11", type: null, cost: 0 },
-        { date: "2024-01-12", type: "veg", cost: 120 },
-        { date: "2024-01-15", type: "chicken", cost: 220 },
-        { date: "2024-01-16", type: null, cost: 0 },
-        { date: "2024-01-17", type: "veg", cost: 120 },
-        { date: "2024-01-18", type: "chicken", cost: 220 },
-        { date: "2024-01-19", type: "chicken", cost: 220 },
-      ],
-    },
-  ]);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const selectedDateString = format(selectedDate, "yyyy-MM-dd");
 
-  const updateMeal = (memberId: string, mealType: "chicken" | "veg" | null) => {
-    setTeamMembers((prev) =>
-      prev.map((member) => {
-        if (member.id === memberId) {
-          const existingMealIndex = member.meals.findIndex(
-            (meal) => meal.date === selectedDateString
-          );
-          const updatedMeals = [...member.meals];
-
-          if (existingMealIndex >= 0) {
-            // Update existing meal
-            updatedMeals[existingMealIndex] = {
-              date: selectedDateString,
-              type: mealType,
-              cost: mealType ? MEAL_PRICES[mealType] : 0,
-            };
-          } else {
-            // Add new meal entry
-            updatedMeals.push({
-              date: selectedDateString,
-              type: mealType,
-              cost: mealType ? MEAL_PRICES[mealType] : 0,
-            });
-          }
-
-          return { ...member, meals: updatedMeals };
+  // Load data from database on component mount
+  useEffect(() => {
+    const fetchTeamMembers = async () => {
+      try {
+        const response = await fetch("/api/team-members");
+        if (response.ok) {
+          const data = await response.json();
+          setTeamMembers(data);
         }
-        return member;
-      })
-    );
+      } catch (error) {
+        console.error("Error fetching team members:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTeamMembers();
+  }, []);
+
+  const updateMeal = async (
+    memberId: string,
+    mealType: "CHICKEN" | "VEG" | null
+  ) => {
+    try {
+      const cost = mealType ? MEAL_PRICES[mealType] : 0;
+
+      const response = await fetch("/api/meals", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          teamMemberId: memberId,
+          date: selectedDateString,
+          type: mealType,
+          cost,
+        }),
+      });
+
+      if (response.ok) {
+        // Refresh team members data
+        const teamResponse = await fetch("/api/team-members");
+        if (teamResponse.ok) {
+          const data = await teamResponse.json();
+          setTeamMembers(data);
+        }
+      }
+    } catch (error) {
+      console.error("Error updating meal:", error);
+    }
   };
 
-  const addNewMember = () => {
+  const addNewMember = async () => {
     if (!newMemberName.trim() || !newMemberId.trim()) {
       return;
     }
 
-    // Check if ID already exists
-    const idExists = teamMembers.some(
-      (member) => member.id.toLowerCase() === newMemberId.toLowerCase()
-    );
-    if (idExists) {
-      alert("Employee ID already exists. Please use a different ID.");
-      return;
+    try {
+      const response = await fetch("/api/team-members", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          employeeId: newMemberId.trim(),
+          name: newMemberName.trim(),
+        }),
+      });
+
+      if (response.ok) {
+        // Refresh team members data
+        const teamResponse = await fetch("/api/team-members");
+        if (teamResponse.ok) {
+          const data = await teamResponse.json();
+          setTeamMembers(data);
+        }
+        setNewMemberName("");
+        setNewMemberId("");
+        setIsAddMemberOpen(false);
+      } else {
+        const errorData = await response.json();
+        alert(errorData.error || "Failed to add team member");
+      }
+    } catch (error) {
+      console.error("Error adding team member:", error);
+      alert("Failed to add team member");
     }
-
-    const newMember: TeamMember = {
-      id: newMemberId.trim(),
-      name: newMemberName.trim(),
-      meals: [],
-    };
-
-    setTeamMembers((prev) => [...prev, newMember]);
-    setNewMemberName("");
-    setNewMemberId("");
-    setIsAddMemberOpen(false);
   };
 
-  const removeMember = (memberId: string) => {
-    setTeamMembers((prev) => prev.filter((member) => member.id !== memberId));
+  const removeMember = async (memberId: string) => {
+    try {
+      const response = await fetch(`/api/team-members/${memberId}`, {
+        method: "DELETE",
+      });
+
+      if (response.ok) {
+        // Refresh team members data
+        const teamResponse = await fetch("/api/team-members");
+        if (teamResponse.ok) {
+          const data = await teamResponse.json();
+          setTeamMembers(data);
+        }
+      }
+    } catch (error) {
+      console.error("Error removing team member:", error);
+    }
   };
 
   const getMemberMealForDate = (member: TeamMember, date: string) => {
@@ -183,8 +193,8 @@ export default function MealTracker() {
     teamMembers.forEach((member) => {
       const meal = getMemberMealForDate(member, selectedDateString);
       totalCost += meal.cost;
-      if (meal.type === "chicken") chickenCount++;
-      if (meal.type === "veg") vegCount++;
+      if (meal.type === "CHICKEN") chickenCount++;
+      if (meal.type === "VEG") vegCount++;
     });
 
     return { totalCost, chickenCount, vegCount };
@@ -212,9 +222,9 @@ export default function MealTracker() {
   const calculateMemberStats = (member: TeamMember) => {
     const totalSpent = member.meals.reduce((sum, meal) => sum + meal.cost, 0);
     const chickenMeals = member.meals.filter(
-      (meal) => meal.type === "chicken"
+      (meal) => meal.type === "CHICKEN"
     ).length;
-    const vegMeals = member.meals.filter((meal) => meal.type === "veg").length;
+    const vegMeals = member.meals.filter((meal) => meal.type === "VEG").length;
     const totalMeals = chickenMeals + vegMeals;
     const averageDaily =
       totalMeals > 0 ? Math.round(totalSpent / totalMeals) : 0;
@@ -224,6 +234,18 @@ export default function MealTracker() {
 
   const { totalCost, chickenCount, vegCount } = calculateDailyTotals();
   const weeklyTotal = calculateWeeklyTotals();
+
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-900 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading meal tracker...</p>
+        </div>
+      </div>
+    );
+  }
 
   // If viewing member history, show the history view
   if (selectedMemberHistory) {
@@ -368,7 +390,7 @@ export default function MealTracker() {
                           {format(new Date(meal.date), "EEEE")}
                         </div>
                         <div className="flex items-center gap-2">
-                          {meal.type === "chicken" && (
+                          {meal.type === "CHICKEN" && (
                             <>
                               <span className="text-lg">🍗</span>
                               <span className="text-sm font-medium text-orange-700">
@@ -376,7 +398,7 @@ export default function MealTracker() {
                               </span>
                             </>
                           )}
-                          {meal.type === "veg" && (
+                          {meal.type === "VEG" && (
                             <>
                               <span className="text-lg">🥗</span>
                               <span className="text-sm font-medium text-green-700">
@@ -424,12 +446,23 @@ export default function MealTracker() {
       {/* Header */}
       <header className="bg-blue-900 text-white shadow-lg">
         <div className="container mx-auto px-4 py-6">
-          <h1 className="text-3xl font-bold text-center">
-            Office Meal Tracker
-          </h1>
-          <p className="text-center text-blue-200 mt-2">
-            Daily Meal Management System
-          </p>
+          <div className="flex items-center justify-between">
+            <div className="flex-1"></div>
+            <div className="text-center">
+              <h1 className="text-3xl font-bold">Office Meal Tracker</h1>
+              <p className="text-blue-200 mt-2">Daily Meal Management System</p>
+            </div>
+            <div className="flex-1 flex justify-end">
+              <Button
+                variant="outline"
+                onClick={() => window.open("/database", "_blank")}
+                className="text-white border-white hover:bg-white hover:text-blue-900"
+              >
+                <Database className="h-4 w-4 mr-2" />
+                View Database
+              </Button>
+            </div>
+          </div>
         </div>
       </header>
 
@@ -677,17 +710,17 @@ export default function MealTracker() {
                     <div className="flex gap-3">
                       <Button
                         variant={
-                          todaysMeal.type === "chicken" ? "default" : "outline"
+                          todaysMeal.type === "CHICKEN" ? "default" : "outline"
                         }
                         onClick={(e: React.MouseEvent) => {
                           e.stopPropagation();
                           updateMeal(
                             member.id,
-                            todaysMeal.type === "chicken" ? null : "chicken"
+                            todaysMeal.type === "CHICKEN" ? null : "CHICKEN"
                           );
                         }}
                         className={`flex-1 h-16 flex-col gap-1 ${
-                          todaysMeal.type === "chicken"
+                          todaysMeal.type === "CHICKEN"
                             ? "bg-orange-500 hover:bg-orange-600 text-white"
                             : "border-orange-200 hover:bg-orange-50 text-orange-700"
                         }`}
@@ -699,17 +732,17 @@ export default function MealTracker() {
 
                       <Button
                         variant={
-                          todaysMeal.type === "veg" ? "default" : "outline"
+                          todaysMeal.type === "VEG" ? "default" : "outline"
                         }
                         onClick={(e: React.MouseEvent) => {
                           e.stopPropagation();
                           updateMeal(
                             member.id,
-                            todaysMeal.type === "veg" ? null : "veg"
+                            todaysMeal.type === "VEG" ? null : "VEG"
                           );
                         }}
                         className={`flex-1 h-16 flex-col gap-1 ${
-                          todaysMeal.type === "veg"
+                          todaysMeal.type === "VEG"
                             ? "bg-green-500 hover:bg-green-600 text-white"
                             : "border-green-200 hover:bg-green-50 text-green-700"
                         }`}
@@ -743,8 +776,8 @@ export default function MealTracker() {
                               {format(new Date(meal.date), "MMM dd")}
                             </span>
                             <div className="flex items-center gap-1">
-                              {meal.type === "chicken" && <span>🍗</span>}
-                              {meal.type === "veg" && <span>🥗</span>}
+                              {meal.type === "CHICKEN" && <span>🍗</span>}
+                              {meal.type === "VEG" && <span>🥗</span>}
                               {meal.type === null && (
                                 <span className="text-gray-400">-</span>
                               )}
