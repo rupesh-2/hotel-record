@@ -31,6 +31,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Dialog as EditDialog,
+  DialogContent as EditDialogContent,
+  DialogHeader as EditDialogHeader,
+  DialogTitle as EditDialogTitle,
+} from "@/components/ui/dialog";
 import { format } from "date-fns";
 
 interface MealEntry {
@@ -64,6 +70,11 @@ export default function MealTracker() {
   const [newMemberId, setNewMemberId] = useState("");
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
+  const [editMember, setEditMember] = useState<TeamMember | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editEmployeeId, setEditEmployeeId] = useState("");
+  const [editError, setEditError] = useState("");
+  const [deleteMember, setDeleteMember] = useState<TeamMember | null>(null);
 
   const selectedDateString = format(selectedDate, "yyyy-MM-dd");
 
@@ -172,6 +183,44 @@ export default function MealTracker() {
       }
     } catch (error) {
       console.error("Error removing team member:", error);
+    }
+  };
+
+  const startEditMember = (member: TeamMember) => {
+    setEditMember(member);
+    setEditName(member.name);
+    setEditEmployeeId(member.employeeId);
+    setEditError("");
+  };
+
+  const saveEditMember = async () => {
+    if (!editMember) return;
+    if (!editName.trim() || !editEmployeeId.trim()) {
+      setEditError("Name and Employee ID are required.");
+      return;
+    }
+    try {
+      const response = await fetch(`/api/team-members/${editMember.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: editName.trim(),
+          employeeId: editEmployeeId.trim(),
+        }),
+      });
+      if (response.ok) {
+        const teamResponse = await fetch("/api/team-members");
+        if (teamResponse.ok) {
+          const data = await teamResponse.json();
+          setTeamMembers(data);
+        }
+        setEditMember(null);
+      } else {
+        const errorData = await response.json();
+        setEditError(errorData.error || "Failed to update member");
+      }
+    } catch (error) {
+      setEditError("Failed to update member");
     }
   };
 
@@ -443,6 +492,64 @@ export default function MealTracker() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100">
+      {/* Edit Member Dialog */}
+      <EditDialog
+        open={!!editMember}
+        onOpenChange={(open) => {
+          if (!open) setEditMember(null);
+        }}
+      >
+        <EditDialogContent className="sm:max-w-md">
+          <EditDialogHeader>
+            <EditDialogTitle>Edit Team Member</EditDialogTitle>
+          </EditDialogHeader>
+          <div className="space-y-4 pt-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-member-name">Full Name</Label>
+              <Input
+                id="edit-member-name"
+                value={editName}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setEditName(e.target.value)
+                }
+                className="w-full"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-member-id">Employee ID</Label>
+              <Input
+                id="edit-member-id"
+                value={editEmployeeId}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setEditEmployeeId(e.target.value)
+                }
+                className="w-full"
+              />
+              <p className="text-xs text-gray-500">
+                Enter a unique employee ID
+              </p>
+            </div>
+            {editError && (
+              <div className="text-red-600 text-sm">{editError}</div>
+            )}
+            <div className="flex gap-2 pt-4">
+              <Button
+                onClick={saveEditMember}
+                className="flex-1 bg-blue-600 hover:bg-blue-700"
+              >
+                Save
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setEditMember(null)}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </EditDialogContent>
+      </EditDialog>
       {/* Header */}
       <header className="bg-blue-900 text-white shadow-lg">
         <div className="container mx-auto px-4 py-6">
@@ -666,18 +773,37 @@ export default function MealTracker() {
                         {member.name}
                       </span>
                       <span className="text-xs text-blue-200 font-normal">
-                        ID: {member.id}
+                        ID: {member.employeeId}
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      {todaysMeal.cost > 0 && (
-                        <Badge
-                          variant="secondary"
-                          className="bg-blue-100 text-blue-800"
+                      {/* Edit Button */}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e: React.MouseEvent) => {
+                          e.stopPropagation();
+                          startEditMember(member);
+                        }}
+                        className="h-6 w-6 p-0 hover:bg-yellow-400 hover:text-white"
+                        title="Edit"
+                      >
+                        <svg
+                          width="16"
+                          height="16"
+                          fill="none"
+                          viewBox="0 0 24 24"
                         >
-                          ₨{todaysMeal.cost}
-                        </Badge>
-                      )}
+                          <path
+                            stroke="currentColor"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                            d="M15.232 5.232a3 3 0 1 1 4.243 4.243L7.5 21H3v-4.5l12.232-12.268Z"
+                          />
+                        </svg>
+                      </Button>
+                      {/* Remove Button */}
                       <Button
                         variant="ghost"
                         size="sm"
@@ -686,6 +812,7 @@ export default function MealTracker() {
                           removeMember(member.id);
                         }}
                         className="h-6 w-6 p-0 hover:bg-red-500 hover:text-white"
+                        title="Remove"
                       >
                         <X className="h-3 w-3" />
                       </Button>
