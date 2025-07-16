@@ -75,6 +75,9 @@ export default function MealTracker() {
   const [editEmployeeId, setEditEmployeeId] = useState("");
   const [editError, setEditError] = useState("");
   const [deleteMember, setDeleteMember] = useState<TeamMember | null>(null);
+  const [deleteMemberHistory, setDeleteMemberHistory] = useState<MealEntry[]>(
+    []
+  );
 
   const selectedDateString = format(selectedDate, "yyyy-MM-dd");
 
@@ -184,6 +187,22 @@ export default function MealTracker() {
     } catch (error) {
       console.error("Error removing team member:", error);
     }
+  };
+
+  const confirmDeleteMember = (member: TeamMember) => {
+    setDeleteMember(member);
+
+    // Calculate date 2 months ago
+    const twoMonthsAgo = new Date();
+    twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
+    const twoMonthsAgoString = format(twoMonthsAgo, "yyyy-MM-dd");
+
+    // Filter meals from the past 2 months
+    const recentMeals = member.meals
+      .filter((meal) => meal.date >= twoMonthsAgoString)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    setDeleteMemberHistory(recentMeals);
   };
 
   const startEditMember = (member: TeamMember) => {
@@ -550,6 +569,164 @@ export default function MealTracker() {
           </div>
         </EditDialogContent>
       </EditDialog>
+
+      {/* Delete Confirmation Dialog */}
+      <EditDialog
+        open={!!deleteMember}
+        onOpenChange={(open) => {
+          if (!open) setDeleteMember(null);
+        }}
+      >
+        <EditDialogContent className="sm:max-w-md">
+          <EditDialogHeader>
+            <EditDialogTitle className="flex items-center gap-2 text-red-600">
+              <svg
+                width="20"
+                height="20"
+                fill="none"
+                viewBox="0 0 24 24"
+                className="text-red-600"
+              >
+                <path
+                  stroke="currentColor"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z"
+                />
+              </svg>
+              Confirm Deletion
+            </EditDialogTitle>
+          </EditDialogHeader>
+          <div className="space-y-4 pt-4">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <p className="text-red-800 font-medium mb-2">
+                Are you sure you want to delete this team member?
+              </p>
+              <p className="text-red-700 text-sm">
+                This action will permanently remove{" "}
+                <span className="font-semibold">{deleteMember?.name}</span> (ID:{" "}
+                {deleteMember?.employeeId}) and all their meal records.
+              </p>
+              <p className="text-red-600 text-xs mt-2">
+                This action cannot be undone.
+              </p>
+            </div>
+
+            {/* Past 2 Months History */}
+            <div className="border border-gray-200 rounded-lg p-4">
+              <h4 className="font-medium text-gray-800 mb-3 flex items-center gap-2">
+                <History className="h-4 w-4" />
+                Past 2 Months Meal History
+              </h4>
+              {deleteMemberHistory.length > 0 ? (
+                <div className="space-y-2 max-h-40 overflow-y-auto">
+                  {deleteMemberHistory.map((meal, index) => (
+                    <div
+                      key={`${meal.date}-${index}`}
+                      className="flex items-center justify-between text-sm p-2 bg-gray-50 rounded"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-gray-600 w-16">
+                          {format(new Date(meal.date), "MMM dd")}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          {meal.type === "CHICKEN" && (
+                            <>
+                              <span className="text-sm">🍗</span>
+                              <span className="text-orange-700">Chicken</span>
+                            </>
+                          )}
+                          {meal.type === "VEG" && (
+                            <>
+                              <span className="text-sm">🥗</span>
+                              <span className="text-green-700">Veg</span>
+                            </>
+                          )}
+                          {meal.type === null && (
+                            <span className="text-gray-400">No meal</span>
+                          )}
+                        </div>
+                      </div>
+                      <span className="font-medium text-gray-700">
+                        {meal.cost > 0 ? `₨${meal.cost}` : "₨0"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-4 text-gray-500">
+                  <p className="text-sm">
+                    No meal records in the past 2 months
+                  </p>
+                </div>
+              )}
+
+              {/* Summary Stats */}
+              {deleteMemberHistory.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-gray-200">
+                  <div className="grid grid-cols-3 gap-2 text-xs">
+                    <div className="text-center">
+                      <div className="font-medium text-gray-700">
+                        {deleteMemberHistory.length}
+                      </div>
+                      <div className="text-gray-500">Total Meals</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="font-medium text-orange-600">
+                        {
+                          deleteMemberHistory.filter(
+                            (m) => m.type === "CHICKEN"
+                          ).length
+                        }
+                      </div>
+                      <div className="text-gray-500">Chicken</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="font-medium text-green-600">
+                        {
+                          deleteMemberHistory.filter((m) => m.type === "VEG")
+                            .length
+                        }
+                      </div>
+                      <div className="text-gray-500">Veg</div>
+                    </div>
+                  </div>
+                  <div className="mt-2 text-center">
+                    <div className="font-medium text-blue-600">
+                      ₨
+                      {deleteMemberHistory
+                        .reduce((sum, meal) => sum + meal.cost, 0)
+                        .toLocaleString()}
+                    </div>
+                    <div className="text-gray-500 text-xs">Total Spent</div>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="flex gap-2 pt-4">
+              <Button
+                onClick={() => {
+                  if (deleteMember) {
+                    removeMember(deleteMember.id);
+                    setDeleteMember(null);
+                  }
+                }}
+                className="flex-1 bg-red-600 hover:bg-red-700"
+              >
+                Delete Member
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setDeleteMember(null)}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </EditDialogContent>
+      </EditDialog>
       {/* Header */}
       <header className="bg-blue-900 text-white shadow-lg">
         <div className="container mx-auto px-4 py-6">
@@ -809,7 +986,7 @@ export default function MealTracker() {
                         size="sm"
                         onClick={(e: React.MouseEvent) => {
                           e.stopPropagation();
-                          removeMember(member.id);
+                          confirmDeleteMember(member);
                         }}
                         className="h-6 w-6 p-0 hover:bg-red-500 hover:text-white"
                         title="Remove"
